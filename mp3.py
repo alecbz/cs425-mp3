@@ -11,7 +11,8 @@ def check_argc(args, *counts):
         plural = 'argument'
     if len(args) not in counts:
         count_string = ' or '.join(str(count) for count in counts)
-        print "*** expecting {} {}: got {}".format(count_string, plural, len(args))
+        print "*** expecting {} {}: got {}".format(
+            count_string, plural, len(args))
         return False
     return True
 
@@ -88,7 +89,8 @@ class Cmd(cmd.Cmd):
             return
 
         if not self.server.insert(key, value, level):
-            print "*** key '{0}' already exists: use `update '{0}' '{1}'` to change it".format(key, value)
+            print ("*** key '{0}' already exists: use `update '{0}' '{1}'`"
+                   " to change it").format(key, value)
 
     def do_update(self, s):
         'update <key> <value> [level]'
@@ -101,7 +103,8 @@ class Cmd(cmd.Cmd):
             return
 
         if not self.server.update(key, value, level):
-            print "*** no such key '{0}': use `insert '{0}' '{1}'` to add it".format(key, value)
+            print ("*** no such key '{0}': use `insert '{0}' '{1}'` to add"
+                   " it").format(key, value)
 
     def do_showall(self, s):
         '''showall
