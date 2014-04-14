@@ -125,6 +125,14 @@ class Cmd(cmd.Cmd):
         'exit the interpreter'
         return True
 
+    def do_iden(self, s):
+        'current process\'s identifier (among its peers)'
+        args = shlex.split(s)
+        if not check_argc(args, 0):
+            return
+
+        print self.server.me
+
 def main():
     server = Server(('127.0.0.1', 5000))
     server.start()
