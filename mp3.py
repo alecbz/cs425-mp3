@@ -4,6 +4,7 @@ import shlex
 
 from server import Server
 
+
 def check_argc(args, *counts):
     plural = 'arguments'
     if len(counts) == 1 and counts[0] == 1:
@@ -13,6 +14,7 @@ def check_argc(args, *counts):
         print "*** expecting {} {}: got {}".format(count_string, plural, len(args))
         return False
     return True
+
 
 def get_level(args, index, default='one'):
     try:
@@ -29,6 +31,7 @@ def get_level(args, index, default='one'):
         print "*** expecting level: got {}".format(level)
         return None
 
+
 class Cmd(cmd.Cmd):
 
     prompt = '>> '
@@ -37,7 +40,6 @@ class Cmd(cmd.Cmd):
         cmd.Cmd.__init__(self)
         self.server = server
 
-
     def precmd(self, line):
         if line == 'EOF':
             return 'exit'
@@ -45,7 +47,6 @@ class Cmd(cmd.Cmd):
             return 'showall'
         else:
             return line
-
 
     def default(self, line):
         print "*** unrecognized command '{}'".format(line)
@@ -120,7 +121,6 @@ class Cmd(cmd.Cmd):
 
         print "TODO: show info about key '{}'".format(key)
 
-
     def do_exit(self, s):
         'exit the interpreter'
         return True
@@ -133,6 +133,7 @@ class Cmd(cmd.Cmd):
 
         print self.server.me
 
+
 def main():
     server = Server(('127.0.0.1', 5000))
     server.start()
@@ -141,4 +142,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

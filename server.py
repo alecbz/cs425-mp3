@@ -7,7 +7,9 @@ from threading import Thread, Lock, Condition
 Get = namedtuple('Get', 'seq key')
 Return = namedtuple('Return', 'seq key value timestamp')
 
+
 class Server:
+
     def __init__(self, addr, peers=[]):
         self.addr = addr
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -36,7 +38,8 @@ class Server:
 
     def connect_to_peers(self):
         for addr in self.peers:
-            self.socks[addr] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socks[addr] = socket.socket(
+                socket.AF_INET, socket.SOCK_STREAM)
             self.socks[addr].connect(addr)
 
     def send_to(self, obj, peer):
@@ -45,7 +48,7 @@ class Server:
             self.socks[peer].send(pickle.dumps(obj))
 
     def run(self):
-        self.sock.bind(self.addr) 
+        self.sock.bind(self.addr)
         self.sock.listen(5)
 
         while 1:
@@ -67,7 +70,6 @@ class Server:
             except EOFError:
                 pass  # read more data
 
-
     def handle_connection(self, conn, addr):
         print "new connection from {}".format(addr)
         while 1:
@@ -75,7 +77,7 @@ class Server:
             if isinstance(msg, Get):
                 with self.seq_lock, self.data_lock:
                     if key not in self.data:
-                        msg = Return(self.seq, key, None, None) 
+                        msg = Return(self.seq, key, None, None)
                     else:
                         value, timestamp = self.data[key]
                         msg = Return(self.seq, key, value, timestamp)
@@ -93,8 +95,6 @@ class Server:
                     return self.responses.popleft()
                 else:
                     self.responses_cond.wait()
-
-
 
     def get(self, key, level):
         iden = self.hash_key(key)
@@ -118,8 +118,6 @@ class Server:
             assert isinstance(resp, Return)
             assert resp.key == key
             return resp.value
-
-
 
     def insert(self, key, value, level):
         with self.data_lock:
