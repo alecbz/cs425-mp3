@@ -1,4 +1,6 @@
 #!/usr/bin/python
+import argparse
+import json
 import cmd
 import shlex
 
@@ -138,7 +140,32 @@ class Cmd(cmd.Cmd):
 
 
 def main():
-    server = Server(('127.0.0.1', 5000))
+    parser = argparse.ArgumentParser()
+    parser.add_argument('config_file', type=file, nargs='?', default=0)
+    parser.add_argument('--port', type=int, required=True)
+
+    args = parser.parse_args()
+    address = ('127.0.0.1', args.port)
+
+    config = {'servers': [address]}
+
+    try:
+        config.update(json.load(args.config_file))
+        args.config_file.close()
+    except AttributeError:
+        pass
+
+    config['servers'] = map(tuple, config['servers'])
+
+    if address not in config['servers']:
+        print address
+        print config
+        print "*** specified port not one of the ones in the config file"
+        return
+
+    print config
+
+    server = Server(address, config['servers'])
     server.start()
 
     Cmd(server).cmdloop()

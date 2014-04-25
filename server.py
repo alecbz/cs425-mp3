@@ -1,51 +1,39 @@
+"""Our key-value store server, which listens to requests and interacts
+with other servers."""
 import pickle
 import socket
 import time
 from collections import deque, namedtuple
 from threading import Thread, Lock, Condition
 
-Get = namedtuple('Get', 'seq key')
-Return = namedtuple('Return', 'seq key value timestamp')
+GetRequest = namedtuple('GetRequest', 'key')
+GetResponse = namedtuple('GetResponse', 'key value timestamp')
 
 
-class Server:
+class Server(object):
 
-    def __init__(self, addr, peers=[]):
+    def __init__(self, addr, addrs):
         self.addr = addr
+        self.addrs = sorted(addrs)
+        assert self.addr in addrs
+
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        self.peers = peers
-        self.addresses = sorted(peers + [addr])
-        self.me = self.addresses.index(self.addr)
-
-        self.socks = {}
-        self.socks_locks = [Lock() for sock in self.socks]
 
         self.data = {}
         self.data_lock = Lock()
-
-        self.seq = 0
-        self.seq_lock = Lock()
-
-        self.responses = deque()
-        self.responses_cond = Condition()
 
     def start(self):
         t = Thread(target=self.run)
         t.daemon = True
         t.start()
-        self.connect_to_peers()
 
-    def connect_to_peers(self):
-        for addr in self.peers:
-            self.socks[addr] = socket.socket(
-                socket.AF_INET, socket.SOCK_STREAM)
-            self.socks[addr].connect(addr)
+    def send_message(self, msg, peer):
+        'Send `msg` to `peer` and wait for a response'
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect(peer)
 
-    def send_to(self, obj, peer):
-        'Send the python object `obj` to the specified peer'
-        with self.socks_locks[peer]:
-            self.socks[peer].send(pickle.dumps(obj))
+        self.send(msg, sock)
+        return self.receive(sock)
 
     def run(self):
         self.sock.bind(self.addr)
@@ -58,13 +46,18 @@ class Server:
             t.start()
 
     def hash_key(self, key):
-        return hash(key) % len(self.addresses)
+        return hash(key) % len(self.addrs)
 
-    def receive_object(self, conn):
-        'Receive a pickle-serialized object from the socket `conn`'
+    def send(self, obj, sock):
+        'Send the object `obj` over the socket `sock`'
+        sock.send(pickle.dumps(obj))
+
+    
+    def receive(self, sock):
+        'Receive a pickle-serialized object from the socket `sock`'
         data = ''
         while 1:
-            data += conn.recv(1024)
+            data += sock.recv(1024)
             try:
                 return pickle.loads(data)
             except EOFError:
@@ -73,49 +66,33 @@ class Server:
     def handle_connection(self, conn, addr):
         print "new connection from {}".format(addr)
         while 1:
-            msg = self.receive_object(conn)
-            if isinstance(msg, Get):
-                with self.seq_lock, self.data_lock:
+            msg = self.receive(conn)
+            if isinstance(msg, GetRequest):
+                key = msg.key
+                with self.data_lock:
                     if key not in self.data:
-                        msg = Return(self.seq, key, None, None)
+                        msg = GetResponse(key, value=None, timestamp=None)
                     else:
                         value, timestamp = self.data[key]
-                        msg = Return(self.seq, key, value, timestamp)
-                    self.seq += 1
-                self.send_to(msg, addr)
-            elif isinstance(msg, Return):
-                with self.responses_cond:
-                    self.responses.append(msg)
-                    self.responses_cond.notify_all()
-
-    def get_response(self, seq):
-        with self.responses_cond:
-            while 1:
-                if self.responses and self.responses[0].seq == seq:
-                    return self.responses.popleft()
-                else:
-                    self.responses_cond.wait()
+                        msg = GetResponse(key, value, timestamp)
+                self.send(msg, conn)
 
     def get(self, key, level):
         iden = self.hash_key(key)
-        if iden == self.me:
+        handler = self.addrs[iden]
+        if handler == self.addr:
             # I'm responsible for this key
+            print "I'm responsible for this key"
             with self.data_lock:
-                if key in self.data:
-                    return None
-                else:
+                try:
                     value, timestamp = self.data[key]
                     return value
+                except KeyError:
+                    return None
         else:
-            with self.seq_lock:
-                msg = Get(self.seq, key)
-                self.seq += 1
-
-            peer = self.addresses[iden]
-            self.send_to(msg, peer)
-
-            resp = self.get_response(msg.seq)
-            assert isinstance(resp, Return)
+            print "I'm NOT responsible for this key"
+            resp = self.send_message(GetRequest(key), handler)
+            assert isinstance(resp, GetResponse)
             assert resp.key == key
             return resp.value
 
