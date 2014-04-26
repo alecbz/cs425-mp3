@@ -37,3 +37,11 @@ class KVStore(object):
                 return False
             del self.data[key]
             return True
+
+    def keys(self):
+        with self.lock:
+            return self.data.keys()
+
+    def items(self):
+        with self.lock:
+            return self.data.items()

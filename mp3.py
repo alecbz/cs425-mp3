@@ -3,26 +3,13 @@ import argparse
 import json
 import cmd
 import shlex
+import inspect
 
 from server import Server
 
 
-def check_argc(args, *counts):
-    plural = 'arguments'
-    if len(counts) == 1 and counts[0] == 1:
-        plural = 'argument'
-    if len(args) not in counts:
-        count_string = ' or '.join(str(count) for count in counts)
-        print "*** expecting {} {}: got {}".format(
-            count_string, plural, len(args))
-        return False
-    return True
-
-
-def get_level(args, index, default='one'):
-    try:
-        level = args[index]
-    except IndexError:
+def get_level(level, default='one'):
+    if not level:
         return default
     if level == '1':
         return 'one'
@@ -33,6 +20,27 @@ def get_level(args, index, default='one'):
     else:
         print "*** expecting level: got {}".format(level)
         return None
+
+
+def command(f):
+    spec = inspect.getargspec(f)
+    argc = len(spec.args) if spec.args else 0
+    defaults = len(spec.defaults) if spec.defaults else 0
+    min_args = argc - defaults - 1
+    max_args = argc - 1
+
+    def modified(self, line):
+        args = shlex.split(line)
+        if not (min_args <= len(args) <= max_args):
+            if min_args == max_args:
+                print "*** expecting {} arguments: got {}".format(min_args, len(args))
+            else:
+                print "*** epxecting between {} and {} arguments: got {}".format(min_args, max_args, len(args))
+            return
+        return f(self, *args)
+
+    modified.__doc__ = f.__doc__
+    return modified
 
 
 class Cmd(cmd.Cmd):
@@ -54,23 +62,17 @@ class Cmd(cmd.Cmd):
     def default(self, line):
         print "*** unrecognized command '{}'".format(line)
 
-    def do_delete(self, s):
+    @command
+    def do_delete(self, key):
         'delete <key>'
-        args = shlex.split(s)
-        if not check_argc(args, 1):
-            return
-        key = args[0]
         result = self.server.delete(key)
         if not result:
             print "*** no such key: '{}'".format(key)
 
-    def do_get(self, s):
+    @command
+    def do_get(self, key, level=None):
         'get <key> [level]'
-        args = shlex.split(s)
-        if not check_argc(args, 1, 2):
-            return
-        key = args[0]
-        level = get_level(args, 1)
+        level = get_level(level)
         if not level:
             return
 
@@ -80,13 +82,10 @@ class Cmd(cmd.Cmd):
         else:
             print "*** no such key '{}'".format(key)
 
-    def do_insert(self, s):
+    @command
+    def do_insert(self, key, value, level=None):
         'insert <key> <value> [level]'
-        args = shlex.split(s)
-        if not check_argc(args, 2, 3):
-            return
-        key, value = args[0:2]
-        level = get_level(args, 2)
+        level = get_level(level)
         if not level:
             return
 
@@ -94,13 +93,10 @@ class Cmd(cmd.Cmd):
             print ("*** key '{0}' already exists: use `update '{0}' '{1}'`"
                    " to change it").format(key, value)
 
-    def do_update(self, s):
+    @command
+    def do_update(self, key, value, level=None):
         'update <key> <value> [level]'
-        args = shlex.split(s)
-        if not check_argc(args, 2, 3):
-            return
-        key, value = args[0:2]
-        level = get_level(args, 2)
+        level = get_level(level)
         if not level:
             return
 
@@ -108,35 +104,23 @@ class Cmd(cmd.Cmd):
             print ("*** no such key '{0}': use `insert '{0}' '{1}'` to add"
                    " it").format(key, value)
 
-    def do_showall(self, s):
+    @command
+    def do_showall(self):
         '''showall
         show all stored keys'''
-        args = shlex.split(s)
-        if not check_argc(args, 0):
-            return
+        for key, value in self.server.items():
+            print "'{}' -> '{}'".format(key, value)
 
-        print "TODO: show all keys"
-
-    def do_search(self, s):
+    @command
+    def do_search(self, key):
         'search <key>'
-        args = shlex.split(s)
-        if not check_argc(args, 1):
-            return
-        key = args[0]
-
-        print "TODO: show info about key '{}'".format(key)
+        print "Servers for '{}'".format(key)
+        for ip, port in self.server.owners(key):
+            print "{}:{}".format(ip, port)
 
     def do_exit(self, s):
         'exit the interpreter'
         return True
-
-    def do_iden(self, s):
-        'current process\'s identifier (among its peers)'
-        args = shlex.split(s)
-        if not check_argc(args, 0):
-            return
-
-        print self.server.me
 
 
 def main():
@@ -162,8 +146,6 @@ def main():
         print config
         print "*** specified port not one of the ones in the config file"
         return
-
-    print config
 
     server = Server(address, config['servers'])
     server.start()

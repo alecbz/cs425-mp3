@@ -6,6 +6,8 @@ import time
 from collections import namedtuple
 from threading import Thread, Lock
 
+from Queue import Queue
+
 from kvstore import KVStore
 
 GetRequest = namedtuple('GetRequest', 'key')
@@ -19,6 +21,8 @@ UpdateResponse = namedtuple('UpdateResponse', 'key result')
 
 DeleteRequest = namedtuple('DeleteRequest', 'key')
 DeleteResponse = namedtuple('DeleteResponse', 'key result')
+
+NUM_REPLICAS = 3
 
 
 class Server(object):
@@ -39,13 +43,13 @@ class Server(object):
         thread.daemon = True
         thread.start()
 
-    def send_message(self, msg, peer):
+    def send_message(self, q, msg, peer):
         'Send `msg` to `peer` and wait for a response'
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect(peer)
 
         self.send(msg, sock)
-        return self.receive(sock)
+        q.put(self.receive(sock))
 
     def run(self):
         '''Listening for incoming connections and process them in a
@@ -59,8 +63,9 @@ class Server(object):
             handler.daemon = True
             handler.start()
 
-    def hash_key(self, key):
-        return hash(key) % len(self.addrs)
+    def replicas(self, key):
+        h = hash(key) % len(self.addrs)
+        return set(self.addrs[(h + i) % len(self.addrs)] for i in range(NUM_REPLICAS))
 
     @classmethod
     def send(cls, obj, sock):
@@ -97,47 +102,80 @@ class Server(object):
                 print "Unknown message type: {}".format(msg)
 
     def get(self, key, level):
-        iden = self.hash_key(key)
-        handler = self.addrs[iden]
-        if handler == self.addr:
-            value, timestamp = self.data.get(key)
-            return value
+        q = Queue()
+        for replica in self.replicas(key):
+            t = Thread(target=self.send_message,
+                       args=(q, GetRequest(key), replica))
+            t.start()
+        if level == 'one':
+            wait_for = 1
         else:
-            # I'm not responsible for this key
-            resp = self.send_message(GetRequest(key), handler)
+            wait_for = NUM_REPLICAS
+        responses = []
+        while len(responses) < wait_for:
+            resp = q.get()
             assert isinstance(resp, GetResponse)
             assert resp.key == key
-            return resp.value
+            responses.append(resp)
+        return max(responses, key=lambda r: r.timestamp).value
 
     def insert(self, key, value, level):
-        iden = self.hash_key(key)
-        handler = self.addrs[iden]
-        if handler == self.addr:
-            return self.data.insert(key, value)
+        q = Queue()
+        for replica in self.replicas(key):
+            t = Thread(target=self.send_message,
+                       args=(q, InsertRequest(key, value), replica))
+            t.start()
+
+        if level == 'one':
+            wait_for = 1
         else:
-            resp = self.send_message(InsertRequest(key, value), handler)
+            wait_for = NUM_REPLICAS
+        responses = []
+        while len(responses) < wait_for:
+            resp = q.get()
             assert isinstance(resp, InsertResponse)
             assert resp.key == key
-            return resp.result
+            responses.append(resp)
+        return all(r.result for r in responses)
 
     def update(self, key, value, level):
-        iden = self.hash_key(key)
-        handler = self.addrs[iden]
-        if handler == self.addr:
-            return self.data.update(key, value)
+        q = Queue()
+        for replica in self.replicas(key):
+            t = Thread(target=self.send_message,
+                       args=(q, UpdateRequest(key, value), replica))
+            t.start()
+
+        if level == 'one':
+            wait_for = 1
         else:
-            resp = self.send_message(UpdateRequest(key, value), handler)
+            wait_for = NUM_REPLICAS
+        responses = []
+        while len(responses) < wait_for:
+            resp = q.get()
             assert isinstance(resp, UpdateResponse)
             assert resp.key == key
-            return resp.result
+            responses.append(resp)
+        return all(r.result for r in responses)
 
     def delete(self, key):
-        iden = self.hash_key(key)
-        handler = self.addrs[iden]
-        if handler == self.addr:
-            return self.data.delete(key)
-        else:
-            resp = self.send_message(DeleteRequest(key), handler)
-            assert isinstance(resp, DeleteResponse)
+        q = Queue()
+        for replica in self.replicas(key):
+            t = Thread(target=self.send_message,
+                       args=(q, DeleteRequest(key), replica))
+            t.start()
+
+        responses = []
+        while len(responses) < NUM_REPLICAS:
+            resp = q.get()
+            assert isinstance(resp, UpdateResponse)
             assert resp.key == key
-            return resp.result
+            responses.append(resp)
+        return all(r.result for r in responses)
+
+    def items(self):
+        for key, (value, timestamp) in self.data.items():
+            yield key, value
+
+    def owners(self, key):
+        'Return a list of servers responsible for `key`'
+        return self.replicas(key)
