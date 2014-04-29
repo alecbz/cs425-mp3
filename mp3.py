@@ -131,23 +131,20 @@ def main():
     args = parser.parse_args()
     address = ('127.0.0.1', args.port)
 
-    config = {'servers': [address]}
+    config = {'servers': [address], 'delays': []}
 
     try:
         config.update(json.load(args.config_file))
         args.config_file.close()
     except AttributeError:
         pass
-
     config['servers'] = map(tuple, config['servers'])
-
     if address not in config['servers']:
         print address
         print config
         print "*** specified port not one of the ones in the config file"
         return
-
-    server = Server(address, config['servers'])
+    server = Server(address, config['servers'], config['delays'])
     server.start()
 
     Cmd(server).cmdloop()
