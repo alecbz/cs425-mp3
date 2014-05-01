@@ -5,6 +5,8 @@ import cmd
 import shlex
 import inspect
 
+from functools import wraps
+
 from server import Server
 
 
@@ -29,17 +31,17 @@ def command(f):
     min_args = argc - defaults - 1
     max_args = argc - 1
 
+    @wraps(f)
     def modified(self, line):
         args = shlex.split(line)
         if not (min_args <= len(args) <= max_args):
             if min_args == max_args:
                 print "*** expecting {} arguments: got {}".format(min_args, len(args))
             else:
-                print "*** epxecting between {} and {} arguments: got {}".format(min_args, max_args, len(args))
+                print "*** expecting between {} and {} arguments: got {}".format(min_args, max_args, len(args))
             return
         return f(self, *args)
 
-    modified.__doc__ = f.__doc__
     return modified
 
 
