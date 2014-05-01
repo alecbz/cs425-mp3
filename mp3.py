@@ -129,30 +129,22 @@ class Cmd(cmd.Cmd):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('config_file', type=str, nargs='?', default=None)
     parser.add_argument('-p', '--port', type=int, required=True)
 
     args = parser.parse_args()
     address = ('127.0.0.1', args.port)
 
-    if args.config_file:
-        module_name, file_extension = os.path.splitext(
-            os.path.split(args.config_file)[-1])
-        assert file_extension == '.py'
-        config = imp.load_source(module_name, args.config_file)
-        servers = config.servers
-        delays = config.delays
-    else:
-        servers = [address]
-        delays = {address: 0}
+    import config  # import config.py explicitly
 
-    if address not in servers:
+    if address not in config.servers:
         print address
         print config
         print "*** specified port not one of the ones in the config file"
         return
-    server = Server(address, servers, delays)
+    server = Server(address, config.servers, config.delays)
     server.start()
+
+    print "Running on port {}".format(args.port)
 
     Cmd(server).cmdloop()
 
