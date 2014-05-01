@@ -23,6 +23,8 @@ UpdateResponse = namedtuple('UpdateResponse', 'key result')
 DeleteRequest = namedtuple('DeleteRequest', 'key')
 DeleteResponse = namedtuple('DeleteResponse', 'key result')
 
+RepairRequest = namedtuple('RepairRequest', 'key value timestamp')
+
 NUM_REPLICAS = 3
 
 
@@ -37,8 +39,8 @@ class Server(object):
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.data = KVStore()
-        self.avg_delays = avg_delays 
-        
+        self.avg_delays = avg_delays
+
     def start(self):
         thread = Thread(target=self.run)
         thread.daemon = True
@@ -58,7 +60,7 @@ class Server(object):
         self.sock.bind(self.addr)
         self.sock.listen(5)
 
-        while 1:
+        while True:
             conn, addr = self.sock.accept()
             handler = Thread(target=self.handle_connection, args=(conn, addr))
             handler.daemon = True
@@ -66,7 +68,8 @@ class Server(object):
 
     def replicas(self, key):
         h = hash(key) % len(self.addrs)
-        return set(self.addrs[(h + i) % len(self.addrs)] for i in range(NUM_REPLICAS))
+        return set(self.addrs[(h + i) % len(self.addrs)]
+                   for i in range(NUM_REPLICAS))
 
     @classmethod
     def send(cls, obj, sock):
@@ -77,7 +80,7 @@ class Server(object):
     def receive(cls, sock):
         'Receive a pickle-serialized object from the socket `sock`'
         data = ''
-        while 1:
+        while True:
             data += sock.recv(1024)
             try:
                 return pickle.loads(data)
@@ -85,7 +88,7 @@ class Server(object):
                 pass  # read more data
 
     def handle_connection(self, conn, addr):
-        while 1:
+        while True:
             msg = self.receive(conn)
             if isinstance(msg, GetRequest):
                 value, timestamp = self.data.get(msg.key)
@@ -99,8 +102,29 @@ class Server(object):
             elif isinstance(msg, DeleteRequest):
                 result = self.data.delete(msg.key)
                 self.send(DeleteResponse(msg.key, result), conn)
+            elif isinstance(msg, RepairRequest):
+                self.repair_val_timestamp(msg.key, msg.value, msg.timestamp)
             else:
                 print "Unknown message type: {}".format(msg)
+
+    def repair_val_timestamp(self, key, new_val, new_timestamp):
+        local_pair = self.data.get(key)
+        local_val = local_pair[0]
+        local_timestamp = local_pair[1]
+
+        if local_timestamp < new_timestamp:
+            self.data.update_with_timestamp(key, new_val, new_timestamp)
+
+    def executeRepair(self, key, resp=None):
+        result = resp
+        if not result:
+            result = self.get(key, "all")
+        q = Queue()
+        # send out repair requests to all replicas for a key, no need to block
+        for replica in self.replicas(key):
+            t = Thread(target=self.send_message,
+                       args=(q, RepairRequest(key, result.value, result.timestamp), replica))
+            t.start()
 
     def get(self, key, level):
         q = Queue()
@@ -118,7 +142,17 @@ class Server(object):
             assert isinstance(resp, GetResponse)
             assert resp.key == key
             responses.append(resp)
-        return max(responses, key=lambda r: r.timestamp).value
+
+        local_pair = self.data.get(key)
+        local_val = local_pair[0]
+        local_timestamp = local_pair[1]
+
+        max_response = max(responses, key=lambda r: r.timestamp)
+        resp = None if level == 'one' else max_response
+
+        t = Thread(target=self.executeRepair, args=(key, resp))
+        t.start()
+        return max_response
 
     def insert(self, key, value, level):
         q = Queue()

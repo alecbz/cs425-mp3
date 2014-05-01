@@ -78,7 +78,7 @@ class Cmd(cmd.Cmd):
 
         result = self.server.get(key, level)
         if result:
-            print result
+            print result.value
         else:
             print "*** no such key '{}'".format(key)
 
