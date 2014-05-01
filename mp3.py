@@ -136,7 +136,8 @@ def main():
     address = ('127.0.0.1', args.port)
 
     if args.config_file:
-        module_name, file_extension = os.path.splitext(os.path.split(args.config_file)[-1])
+        module_name, file_extension = os.path.splitext(
+            os.path.split(args.config_file)[-1])
         assert file_extension == '.py'
         config = imp.load_source(module_name, args.config_file)
         servers = config.servers
