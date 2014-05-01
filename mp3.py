@@ -143,7 +143,7 @@ def main():
         delays = config.delays
     else:
         servers = [address]
-        delays = [0]
+        delays = {address: 0}
 
     if address not in servers:
         print address
