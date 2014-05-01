@@ -113,7 +113,7 @@ class Server(object):
         local_timestamp = local_pair[1]
 
         if local_timestamp < new_timestamp:
-            self.data.update_with_timestamp(key, new_val, new_timestamp)
+            self.data.update(key, new_val, new_timestamp)
 
     def executeRepair(self, key, resp=None):
         result = resp
