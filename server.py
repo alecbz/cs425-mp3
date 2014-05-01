@@ -202,7 +202,7 @@ class Server(object):
         responses = []
         while len(responses) < NUM_REPLICAS:
             resp = q.get()
-            assert isinstance(resp, UpdateResponse)
+            assert isinstance(resp, DeleteResponse)
             assert resp.key == key
             responses.append(resp)
         return all(r.result for r in responses)
