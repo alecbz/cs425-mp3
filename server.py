@@ -3,6 +3,7 @@ with other servers."""
 import pickle
 import socket
 import time
+import random
 from collections import namedtuple
 from threading import Thread, Lock
 
@@ -29,15 +30,15 @@ class Server(object):
 
     'A server for the key-value store'
 
-    def __init__(self, addr, addrs):
+    def __init__(self, addr, addrs, avg_delays):
         self.addr = addr
         self.addrs = sorted(addrs)
         assert self.addr in addrs
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
         self.data = KVStore()
-
+        self.avg_delays = avg_delays 
+        
     def start(self):
         thread = Thread(target=self.run)
         thread.daemon = True
@@ -47,7 +48,7 @@ class Server(object):
         'Send `msg` to `peer` and wait for a response'
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect(peer)
-
+        time.sleep(random.uniform(0, 2 * self.avg_delays[str(peer[1])]))
         self.send(msg, sock)
         q.put(self.receive(sock))
 
