@@ -50,7 +50,7 @@ class Server(object):
         'Send `msg` to `peer` and wait for a response'
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect(peer)
-        time.sleep(random.uniform(0, 2 * self.avg_delays[str(peer[1])]))
+        time.sleep(random.uniform(0, 2 * self.avg_delays[peer]))
         self.send(msg, sock)
         q.put(self.receive(sock))
 

@@ -23,7 +23,7 @@ class KVStore(object):
                 return False
             self.data[key] = (value, time.time())
             return True
-  
+
     def update(self, key, value, timestamp=time.time()):
         with self.lock:
             if key not in self.data:

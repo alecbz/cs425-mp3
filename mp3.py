@@ -4,6 +4,8 @@ import json
 import cmd
 import shlex
 import inspect
+import imp
+import os
 
 from functools import wraps
 
@@ -127,26 +129,28 @@ class Cmd(cmd.Cmd):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('config_file', type=file, nargs='?', default=0)
-    parser.add_argument('--port', type=int, required=True)
+    parser.add_argument('config_file', type=str, nargs='?', default=None)
+    parser.add_argument('-p', '--port', type=int, required=True)
 
     args = parser.parse_args()
     address = ('127.0.0.1', args.port)
 
-    config = {'servers': [address], 'delays': []}
+    if args.config_file:
+        module_name, file_extension = os.path.splitext(os.path.split(args.config_file)[-1])
+        assert file_extension == '.py'
+        config = imp.load_source(module_name, args.config_file)
+        servers = config.servers
+        delays = config.delays
+    else:
+        servers = [address]
+        delays = [0]
 
-    try:
-        config.update(json.load(args.config_file))
-        args.config_file.close()
-    except AttributeError:
-        pass
-    config['servers'] = map(tuple, config['servers'])
-    if address not in config['servers']:
+    if address not in servers:
         print address
         print config
         print "*** specified port not one of the ones in the config file"
         return
-    server = Server(address, config['servers'], config['delays'])
+    server = Server(address, servers, delays)
     server.start()
 
     Cmd(server).cmdloop()
