@@ -143,10 +143,6 @@ class Server(object):
             assert resp.key == key
             responses.append(resp)
 
-        local_pair = self.data.get(key)
-        local_val = local_pair[0]
-        local_timestamp = local_pair[1]
-
         max_response = max(responses, key=lambda r: r.timestamp)
         resp = None if level == 'one' else max_response
 
