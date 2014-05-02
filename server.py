@@ -50,7 +50,7 @@ class Server(object):
         'Send `msg` to `peer` and wait for a response'
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect(peer)
-        time.sleep(random.uniform(0, 2 * self.avg_delays[str(peer[1])]))
+        time.sleep(random.uniform(0, 2 * self.avg_delays[peer]))
         self.send(msg, sock)
         q.put(self.receive(sock))
 
@@ -113,7 +113,7 @@ class Server(object):
         local_timestamp = local_pair[1]
 
         if local_timestamp < new_timestamp:
-            self.data.update_with_timestamp(key, new_val, new_timestamp)
+            self.data.update(key, new_val, new_timestamp)
 
     def executeRepair(self, key, resp=None):
         result = resp
@@ -142,10 +142,6 @@ class Server(object):
             assert isinstance(resp, GetResponse)
             assert resp.key == key
             responses.append(resp)
-
-        local_pair = self.data.get(key)
-        local_val = local_pair[0]
-        local_timestamp = local_pair[1]
 
         max_response = max(responses, key=lambda r: r.timestamp)
         resp = None if level == 'one' else max_response

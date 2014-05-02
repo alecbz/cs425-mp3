@@ -4,6 +4,8 @@ import json
 import cmd
 import shlex
 import inspect
+import imp
+import os
 
 from functools import wraps
 
@@ -127,27 +129,22 @@ class Cmd(cmd.Cmd):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('config_file', type=file, nargs='?', default=0)
-    parser.add_argument('--port', type=int, required=True)
+    parser.add_argument('-p', '--port', type=int, required=True)
 
     args = parser.parse_args()
     address = ('127.0.0.1', args.port)
 
-    config = {'servers': [address], 'delays': []}
+    import config  # import config.py explicitly
 
-    try:
-        config.update(json.load(args.config_file))
-        args.config_file.close()
-    except AttributeError:
-        pass
-    config['servers'] = map(tuple, config['servers'])
-    if address not in config['servers']:
+    if address not in config.servers:
         print address
         print config
         print "*** specified port not one of the ones in the config file"
         return
-    server = Server(address, config['servers'], config['delays'])
+    server = Server(address, config.servers, config.delays)
     server.start()
+
+    print "Running on port {}".format(args.port)
 
     Cmd(server).cmdloop()
 
