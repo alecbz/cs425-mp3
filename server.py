@@ -111,8 +111,9 @@ class Server(object):
         local_pair = self.data.get(key)
         local_val = local_pair[0]
         local_timestamp = local_pair[1]
-
-        if local_timestamp < new_timestamp:
+       
+        #  ignore repairs if key has been deleted/doesn't exist
+        if local_pair and local_timestamp < new_timestamp:
             self.data.update(key, new_val, new_timestamp)
 
     def executeRepair(self, key, resp=None):
