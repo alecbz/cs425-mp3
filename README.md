@@ -31,19 +31,19 @@ can also specify the preferred consistency level for the operation. Examples for
 
 Insert key-value pair 5 -> 1 with consistency level "one"
 
-  insert 5 1 one
+  `insert 5 1 one`
 
 Delete key 5 
 
-  delete 5
+  `delete 5`
 
 Update key 5 with value 3 with consistency level "all"
 
-  update 5 3 all
+  `update 5 3 all`
 
 Get key 5's current value with consistency level "one"
 
-  get 5 one
+  `get 5 one`
 
 ## Description of Algorithm
 
